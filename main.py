@@ -79,7 +79,7 @@ def get_google_service(api_name: str, version: str):
 # ---------------- IMAP helpers -----------------------
 
 def get_latest_email_imap():
-    """Devuelve (subject, body) del email más reciente en INBOX."""
+    """Devuelve (subject, body, email_id) del email más reciente en INBOX."""
     if not all([IMAP_USER, IMAP_PASSWORD]):
         raise RuntimeError("IMAP_USER y/o IMAP_PASSWORD no definidos en el entorno")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
@@ -89,8 +89,8 @@ def get_latest_email_imap():
     ids = data[0].split()
     if not ids:
         mail.logout()
-        return None, None
-    latest_id = ids[-1]
+        return None, None, None
+    latest_id = ids[-1].decode()
     typ, msg_data = mail.fetch(latest_id, "(RFC822)")
     raw_email = msg_data[0][1]
     msg = email.message_from_bytes(raw_email, policy=email.policy.default)
@@ -108,7 +108,7 @@ def get_latest_email_imap():
     else:
         body_text = msg.get_content()
     mail.logout()
-    return subject, body_text
+    return subject, body_text, latest_id
 
 # ------------- LLM analysis --------------------------
 
@@ -152,19 +152,42 @@ def create_calendar_event(cal_service, meeting_info):
 
 # ------------------- main ----------------------------
 
+def load_last_processed_id():
+    """Carga el ID del último correo procesado."""
+    try:
+        with open("last_processed_email.txt", "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+def save_last_processed_id(email_id):
+    """Guarda el ID del último correo procesado."""
+    with open("last_processed_email.txt", "w") as f:
+        f.write(email_id)
+
 def main():
     cal_service = get_google_service("calendar", "v3")
 
-    subject, body = get_latest_email_imap()
+    subject, body, email_id = get_latest_email_imap()
     if not body:
         print("No hay correos en bandeja de entrada.")
+        return
+
+    # Verificar si ya se procesó este correo
+    last_processed_id = load_last_processed_id()
+    if email_id == last_processed_id:
+        print(f"El correo {email_id} ya fue procesado. Omitiendo...")
         return
 
     meeting_info = analyze_email_with_llm(subject, body)
     if meeting_info.get("has_meeting"):
         create_calendar_event(cal_service, meeting_info)
+        print(f"Reunión detectada y evento creado para correo {email_id}")
     else:
         print("El último correo no contiene información de reunión.")
+    
+    # Guardar el ID del correo procesado
+    save_last_processed_id(email_id)
 
 if __name__ == "__main__":
     main()
