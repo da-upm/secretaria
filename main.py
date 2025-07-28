@@ -53,10 +53,15 @@ IMAP_PASSWORD = os.getenv("IMAP_PASSWORD")
 
 SYSTEM_PROMPT = (
     "Eres un asistente que detecta si un correo electrónico incluye detalles de una reunión.\n"
+    "IMPORTANTE: Estamos en el año 2025. Si el correo no especifica año, usa 2025.\n"
+    "Si el correo menciona fechas pasadas o futuras, interprétalas correctamente según el contexto.\n"
     "Devuelve SIEMPRE un JSON con la siguiente estructura:\n"
-    "{\n  \"has_meeting\": bool,\n  \"title\": str,\n  \"start\": str(ISO 8601),\n  \"end\": str(ISO 8601),\n  \"location\": str,\n  \"description\": str\n}\n"
+    "{\n  \"has_meeting\": bool,\n  \"title\": str,\n  \"start\": str(ISO 8601 con zona horaria),\n  \"end\": str(ISO 8601 con zona horaria),\n  \"location\": str,\n  \"description\": str\n}\n"
     "Si no hay reunión, has_meeting debe ser false y los demás campos pueden ser cadenas vacías.\n"
-    "Si hay reunión, rellena todos los campos; si falta hora de fin, pon una hora después de inicio."
+    "Si hay reunión, rellena todos los campos con información actual (año 2025).\n"
+    "Las fechas deben estar en formato ISO 8601 con zona horaria, por ejemplo: '2025-07-28T14:00:00+02:00'\n"
+    "Si falta hora de fin, pon una hora después de inicio.\n"
+    "Si la fecha es relativa (ej: 'mañana', 'próximo lunes'), calcula la fecha correcta basándote en que hoy es 28 de julio de 2025."
 )
 
 # ------------ Google Calendar helpers ----------------
@@ -135,7 +140,11 @@ def get_latest_email_imap():
 # ------------- LLM analysis --------------------------
 
 def analyze_email_with_llm(subject: str, body: str):
-    prompt = f"Asunto: {subject}\nCuerpo:\n{body}"
+    # Obtener fecha actual para contexto
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_time = datetime.now().strftime("%H:%M")
+    
+    prompt = f"Fecha actual: {current_date} {current_time}\nAsunto: {subject}\nCuerpo:\n{body}"
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
@@ -157,10 +166,28 @@ def analyze_email_with_llm(subject: str, body: str):
 def create_calendar_event(cal_service, meeting_info):
     start_iso = meeting_info["start"]
     end_iso = meeting_info["end"]
-    if not end_iso:
+    
+    # Validar que las fechas sean razonables (año 2024 o posterior)
+    try:
         start_dt = dateparser.parse(start_iso)
-        end_dt = start_dt + timedelta(hours=1)
-        end_iso = end_dt.isoformat()
+        if start_dt and start_dt.year < 2024:
+            print(f"⚠️ Fecha sospechosa detectada: {start_iso}. Ajustando al año actual...")
+            start_dt = start_dt.replace(year=datetime.now().year)
+            start_iso = start_dt.isoformat()
+            
+        if not end_iso:
+            end_dt = start_dt + timedelta(hours=1)
+            end_iso = end_dt.isoformat()
+        else:
+            end_dt = dateparser.parse(end_iso)
+            if end_dt and end_dt.year < 2024:
+                end_dt = end_dt.replace(year=datetime.now().year)
+                end_iso = end_dt.isoformat()
+                
+    except Exception as e:
+        print(f"❌ Error parseando fechas: {e}")
+        return None
+        
     event = {
         "summary": meeting_info["title"],
         "location": meeting_info.get("location", ""),
