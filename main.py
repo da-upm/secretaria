@@ -59,9 +59,10 @@ SYSTEM_PROMPT = (
     "{\n  \"has_meeting\": bool,\n  \"title\": str,\n  \"start\": str(ISO 8601 con zona horaria),\n  \"end\": str(ISO 8601 con zona horaria),\n  \"location\": str,\n  \"description\": str\n}\n"
     "Si no hay reunión, has_meeting debe ser false y los demás campos pueden ser cadenas vacías.\n"
     "Si hay reunión, rellena todos los campos con información actual (año 2025).\n"
+    "Extrae toda la información relevante del correo y establece un título descriptivo.\n"
     "Las fechas deben estar en formato ISO 8601 con zona horaria, por ejemplo: '2025-07-28T14:00:00+02:00'\n"
     "Si falta hora de fin, pon una hora después de inicio.\n"
-    "Si la fecha es relativa (ej: 'mañana', 'próximo lunes'), calcula la fecha correcta basándote en que hoy es 28 de julio de 2025."
+    "Si la fecha es relativa (ej: 'mañana', 'próximo lunes'), calcula la fecha correcta basándote en la fecha actual proporcionada."
 )
 
 # ------------ Google Calendar helpers ----------------
@@ -143,8 +144,9 @@ def analyze_email_with_llm(subject: str, body: str):
     # Obtener fecha actual para contexto
     current_date = datetime.now().strftime("%Y-%m-%d")
     current_time = datetime.now().strftime("%H:%M")
+    current_date_spanish = datetime.now().strftime("%d de %B de %Y")
     
-    prompt = f"Fecha actual: {current_date} {current_time}\nAsunto: {subject}\nCuerpo:\n{body}"
+    prompt = f"Fecha actual: {current_date} {current_time} ({current_date_spanish})\nAsunto: {subject}\nCuerpo:\n{body}"
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
