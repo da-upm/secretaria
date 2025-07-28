@@ -283,7 +283,7 @@ wheels = [
 [[package]]
 name = "secretaria"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth-httplib2" },
@@ -300,9 +300,6 @@ requires-dist = [
     { name = "python-dateutil", specifier = ">=2.8.0" },
     { name = "requests", specifier = ">=2.25.0" },
 ]
-
-[package.metadata.requires-dev]
-dev = []
 
 [[package]]
 name = "six"
