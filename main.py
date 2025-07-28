@@ -168,6 +168,12 @@ def create_calendar_event(cal_service, meeting_info):
         "start": {"dateTime": start_iso, "timeZone": TIMEZONE},
         "end": {"dateTime": end_iso, "timeZone": TIMEZONE},
     }
+    print(f"Creando evento: {event['summary']} ({start_iso} - {end_iso}) en el calendario {CALENDAR_ID}")
+    if not CALENDAR_ID:
+        raise ValueError("CALENDAR_ID no definido. Asegúrate de configurarlo en el entorno.")
+    if not cal_service:
+        cal_service = get_google_service("calendar", "v3")
+    # Crear el evento en el calendario
     created = cal_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
     print(f"Evento creado: {created.get('htmlLink')}")
     return created
