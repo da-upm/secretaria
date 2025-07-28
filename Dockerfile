@@ -1,5 +1,5 @@
 # Usar imagen base de Python con uv
-FROM ghcr.io/astral-sh/uv:0.8.3
+FROM ghcr.io/astral-sh/uv:0.8.3-debian
 
 # Establecer directorio de trabajo
 WORKDIR /app
