@@ -59,7 +59,7 @@ SYSTEM_PROMPT = (
     "{\n  \"has_meeting\": bool,\n  \"title\": str,\n  \"start\": str(ISO 8601 con zona horaria),\n  \"end\": str(ISO 8601 con zona horaria),\n  \"location\": str,\n  \"description\": str\n}\n"
     "Si no hay reunión, has_meeting debe ser false y los demás campos pueden ser cadenas vacías.\n"
     "Si hay reunión, rellena todos los campos con información actual (año 2025).\n"
-    "Extrae toda la información relevante del correo y establece un título descriptivo.\n"
+    "Extrae toda la información relevante del correo y establece un título descriptivo. Intenta incorporar detalles en el titulo que se encuentran en el cuerpo del correo.\n"
     "Las fechas deben estar en formato ISO 8601 con zona horaria, por ejemplo: '2025-07-28T14:00:00+02:00'\n"
     "Si falta hora de fin, pon una hora después de inicio.\n"
     "Si la fecha es relativa (ej: 'mañana', 'próximo lunes'), calcula la fecha correcta basándote en la fecha actual proporcionada."
