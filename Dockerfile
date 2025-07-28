@@ -26,11 +26,5 @@ COPY . .
 # Hacer ejecutable el script de entrada
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Crear directorio para credenciales y tokens
-RUN mkdir -p /app/credentials
-
-# Exponer puerto para Ollama (opcional, para debugging)
-EXPOSE 11434
-
 # Script de entrada que inicia Ollama y luego el asistente
 CMD ["/app/docker-entrypoint.sh"]
