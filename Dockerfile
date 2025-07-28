@@ -10,15 +10,12 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar Ollama
-RUN curl -fsSL https://ollama.ai/install.sh | sh
-
 # Copiar archivos de configuración del proyecto
 COPY pyproject.toml .
 COPY .python-version .
 
 # Instalar dependencias de Python con uv
-RUN uv sync --frozen
+RUN uv sync
 
 # Copiar el código fuente
 COPY . .
