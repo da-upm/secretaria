@@ -44,6 +44,7 @@ TIMEZONE = "Europe/Madrid"
 
 # Configuración del calendario
 CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")  # ID del calendario específico
+MAX_EMAILS_TO_CHECK = int(os.getenv("MAX_EMAILS_TO_CHECK", "10"))  # Número de correos a revisar
 
 IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.example.com")
 IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
@@ -106,8 +107,8 @@ def get_google_service(api_name: str, version: str):
 
 # ---------------- IMAP helpers -----------------------
 
-def get_latest_email_imap():
-    """Devuelve (subject, body, email_id) del email más reciente en INBOX."""
+def get_latest_emails_imap(max_emails=10):
+    """Devuelve una lista de (subject, body, email_id) de los últimos N correos en INBOX."""
     if not all([IMAP_USER, IMAP_PASSWORD]):
         raise RuntimeError("IMAP_USER y/o IMAP_PASSWORD no definidos en el entorno")
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
@@ -117,26 +118,48 @@ def get_latest_email_imap():
     ids = data[0].split()
     if not ids:
         mail.logout()
-        return None, None, None
-    latest_id = ids[-1].decode()
-    typ, msg_data = mail.fetch(latest_id, "(RFC822)")
-    raw_email = msg_data[0][1]
-    msg = email.message_from_bytes(raw_email, policy=email.policy.default)
-    # ---- Subject ----
-    subject = str(email.header.make_header(email.header.decode_header(msg.get("Subject", "(sin asunto)"))))
-    # ---- Body (texto plano) ----
-    body_text = ""
-    if msg.is_multipart():
-        for part in msg.walk():
-            ctype = part.get_content_type()
-            disp = str(part.get("Content-Disposition"))
-            if ctype == "text/plain" and "attachment" not in disp:
-                body_text = part.get_content()
-                break
-    else:
-        body_text = msg.get_content()
+        return []
+    
+    # Obtener los últimos max_emails correos
+    latest_ids = ids[-max_emails:]
+    emails = []
+    
+    for email_id in latest_ids:
+        try:
+            email_id_str = email_id.decode()
+            typ, msg_data = mail.fetch(email_id, "(RFC822)")
+            raw_email = msg_data[0][1]
+            msg = email.message_from_bytes(raw_email, policy=email.policy.default)
+            
+            # ---- Subject ----
+            subject = str(email.header.make_header(email.header.decode_header(msg.get("Subject", "(sin asunto)"))))
+            
+            # ---- Body (texto plano) ----
+            body_text = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    disp = str(part.get("Content-Disposition"))
+                    if ctype == "text/plain" and "attachment" not in disp:
+                        body_text = part.get_content()
+                        break
+            else:
+                body_text = msg.get_content()
+            
+            emails.append((subject, body_text, email_id_str))
+        except Exception as e:
+            print(f"Error procesando correo {email_id}: {e}")
+            continue
+    
     mail.logout()
-    return subject, body_text, latest_id
+    return emails
+
+def get_latest_email_imap():
+    """Devuelve (subject, body, email_id) del email más reciente en INBOX."""
+    emails = get_latest_emails_imap(1)
+    if emails:
+        return emails[0]
+    return None, None, None
 
 # ------------- LLM analysis --------------------------
 
@@ -209,18 +232,18 @@ def create_calendar_event(cal_service, meeting_info):
 
 # ------------------- main ----------------------------
 
-def load_last_processed_id():
-    """Carga el ID del último correo procesado."""
+def load_processed_ids():
+    """Carga los IDs de los correos ya procesados."""
     try:
-        with open("last_processed_email.txt", "r") as f:
-            return f.read().strip()
+        with open("processed_emails.json", "r") as f:
+            return set(json.load(f))
     except FileNotFoundError:
-        return None
+        return set()
 
-def save_last_processed_id(email_id):
-    """Guarda el ID del último correo procesado."""
-    with open("last_processed_email.txt", "w") as f:
-        f.write(email_id)
+def save_processed_ids(processed_ids):
+    """Guarda los IDs de los correos procesados."""
+    with open("processed_emails.json", "w") as f:
+        json.dump(list(processed_ids), f)
 
 def main():
     cal_service = get_google_service("calendar", "v3")
@@ -228,26 +251,50 @@ def main():
     # Descomentar la siguiente línea para ver todos los calendarios disponibles
     # list_calendars(cal_service)
 
-    subject, body, email_id = get_latest_email_imap()
-    if not body:
+    # Obtener los últimos correos
+    emails = get_latest_emails_imap(MAX_EMAILS_TO_CHECK)
+    if not emails:
         print("No hay correos en bandeja de entrada.")
         return
 
-    # Verificar si ya se procesó este correo
-    last_processed_id = load_last_processed_id()
-    if email_id == last_processed_id:
-        print(f"El correo {email_id} ya fue procesado. Omitiendo...")
-        return
-
-    meeting_info = analyze_email_with_llm(subject, body)
-    if meeting_info.get("has_meeting"):
-        create_calendar_event(cal_service, meeting_info)
-        print(f"Reunión detectada y evento creado para correo {email_id}")
-    else:
-        print("El último correo no contiene información de reunión.")
+    # Cargar IDs ya procesados
+    processed_ids = load_processed_ids()
+    new_meetings_found = 0
     
-    # Guardar el ID del correo procesado
-    save_last_processed_id(email_id)
+    print(f"📧 Revisando los últimos {len(emails)} correos...")
+    
+    for i, (subject, body, email_id) in enumerate(emails, 1):
+        print(f"\n--- Correo {i}/{len(emails)} (ID: {email_id}) ---")
+        print(f"Asunto: {subject[:100]}{'...' if len(subject) > 100 else ''}")
+        
+        # Verificar si ya se procesó este correo
+        if email_id in processed_ids:
+            print("✅ Ya procesado anteriormente. Omitiendo...")
+            continue
+
+        try:
+            meeting_info = analyze_email_with_llm(subject, body)
+            if meeting_info.get("has_meeting"):
+                create_calendar_event(cal_service, meeting_info)
+                print(f"🗓️ Reunión detectada y evento creado para correo {email_id}")
+                new_meetings_found += 1
+            else:
+                print("📝 No contiene información de reunión.")
+            
+            # Marcar como procesado
+            processed_ids.add(email_id)
+            
+        except Exception as e:
+            print(f"❌ Error procesando correo {email_id}: {e}")
+            continue
+    
+    # Guardar IDs procesados
+    save_processed_ids(processed_ids)
+    
+    if new_meetings_found > 0:
+        print(f"\n🎉 Se crearon {new_meetings_found} nuevos eventos en el calendario")
+    else:
+        print(f"\n📋 No se encontraron nuevas reuniones en los últimos {len(emails)} correos")
 
 if __name__ == "__main__":
     main()
