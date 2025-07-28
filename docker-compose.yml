@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  secretaria:
+    build: .
+    container_name: secretaria-assistant
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    
+    volumes:
+      # Montar credenciales de Google Calendar
+      - ./credentials.json:/app/credentials/credentials.json:ro
+      
+      # Persistir token de autenticación (opcional)
+      - ./data:/app/credentials
+    
+    # Recursos opcionales (ajustar según necesidades)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    
+    # Healthcheck opcional
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "secretaria_service.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
