@@ -1,5 +1,5 @@
 # Usar imagen base de Python con uv
-FROM ghcr.io/astral-sh/uv:python3.12-slim
+FROM ghcr.io/astral-sh/uv:0.8.3
 
 # Establecer directorio de trabajo
 WORKDIR /app
