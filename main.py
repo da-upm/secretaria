@@ -38,8 +38,8 @@ from googleapiclient.discovery import build
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
 ]
-OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3:8b-instruct-q4_K_M"  # ajusta al que tengas
+OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")  # ajusta al que tengas
 TIMEZONE = "Europe/Madrid"
 
 IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.example.com")
