@@ -42,6 +42,9 @@ OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/gener
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")  # ajusta al que tengas
 TIMEZONE = "Europe/Madrid"
 
+# Configuración del calendario
+CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")  # ID del calendario específico
+
 IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.example.com")
 IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
 IMAP_USER = os.getenv("IMAP_USER")
@@ -57,6 +60,25 @@ SYSTEM_PROMPT = (
 )
 
 # ------------ Google Calendar helpers ----------------
+
+def list_calendars(cal_service):
+    """Lista todos los calendarios disponibles para ayudar a encontrar el ID correcto."""
+    try:
+        calendars_result = cal_service.calendarList().list().execute()
+        calendars = calendars_result.get('items', [])
+        
+        print("\n📅 Calendarios disponibles:")
+        for calendar in calendars:
+            cal_id = calendar['id']
+            summary = calendar.get('summary', 'Sin nombre')
+            primary = " (PRINCIPAL)" if calendar.get('primary', False) else ""
+            print(f"  ID: {cal_id}")
+            print(f"  Nombre: {summary}{primary}")
+            print("  ---")
+        return calendars
+    except Exception as e:
+        print(f"Error listando calendarios: {e}")
+        return []
 
 def get_google_service(api_name: str, version: str):
     creds = None
@@ -146,7 +168,7 @@ def create_calendar_event(cal_service, meeting_info):
         "start": {"dateTime": start_iso, "timeZone": TIMEZONE},
         "end": {"dateTime": end_iso, "timeZone": TIMEZONE},
     }
-    created = cal_service.events().insert(calendarId="primary", body=event).execute()
+    created = cal_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
     print(f"Evento creado: {created.get('htmlLink')}")
     return created
 
@@ -167,6 +189,9 @@ def save_last_processed_id(email_id):
 
 def main():
     cal_service = get_google_service("calendar", "v3")
+    
+    # Descomentar la siguiente línea para ver todos los calendarios disponibles
+    # list_calendars(cal_service)
 
     subject, body, email_id = get_latest_email_imap()
     if not body:
